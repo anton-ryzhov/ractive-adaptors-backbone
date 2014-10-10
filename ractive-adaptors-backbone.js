@@ -77,6 +77,22 @@
 	var originalSetProperty = '_ractiveAdaptorsBackboneOriginalSet';
 	var BackboneCollectionWrapperChangeEvent = 'BackboneCollectionWrapper:change';
 
+	var counter = window.counter = {
+		model_change: 0,
+		model_tear: 0,
+		model_tryset: 0,
+		model_set: 0,
+		model_tryreset: 0,
+		model_reset: 0,
+		collection_change: 0,
+		collection_tear: 0,
+		collection_tryreset: 0,
+		collection_tryreset2: 0,
+		collection_reset: 0,
+		collection_try_add: 0,
+		collection_add: 0,
+	};
+
 	if ( !Ractive || !Backbone ) {
 		throw new Error( 'Could not find Ractive or Backbone! Check your paths config' );
 	}
@@ -123,6 +139,7 @@
 		this.value = model;
 
 		this.off = onOff( model, 'change', function () {
+			counter.model_change++;
 			var release = acquireLock( model, 'set' );
 			ractive.set( prefix( model.changed ) );
 			release();
@@ -131,7 +148,9 @@
 
 	BackboneModelWrapper.prototype = {
 		teardown: function () {
+			counter.model_tear++;
 			this.off();
+			this.value.off( 'change', this.modelChangeHandler );
 		},
 		get: function () {
 			return this.value.attributes;
@@ -139,16 +158,20 @@
 		set: function ( keypath, value ) {
 			// Only set if the model didn't originate the change itself, and
 			// only if it's an immediate child property
+			counter.model_tryset++;
 			if ( !isLocked( this.value, 'set' ) && keypath.indexOf( '.' ) === -1 ) {
+				counter.model_set++;
 				this.value.set( keypath, value );
 			}
 		},
 		reset: function ( object ) {
 			// If the new object is a Backbone model, assume this one is
 			// being retired. Ditto if it's not a model at all
+			counter.model_tryreset++;
 			if ( object instanceof Backbone.Model || !(object instanceof Object) ) {
 				return false;
 			}
+			counter.model_reset++;
 
 			// Otherwise if this is a POJO, reset the model
 			//Backbone 1.1.2 no longer has reset and just uses set
@@ -160,9 +183,11 @@
 		this.value = collection;
 
 		function changeHandler () {
+			counter.collection_try_add++;
 			if ( isLocked( collection, 'setSuccess' ) ) {
 				return;
-			}
+			};
+			counter.collection_add++;
 
 			// TODO smart merge. It should be possible, if awkward, to trigger smart
 			// updates instead of a blunderbuss .set() approach
@@ -207,21 +232,25 @@
 				}
 			}
 
+			counter.collection_tear++;
 			this.off();
 		},
 		get: function () {
 			return this.value.models;
 		},
 		reset: function ( models ) {
+			counter.collection_tryreset++;
 			if ( isLocked( this.value, 'set' ) ) {
 				return;
 			}
+			counter.collection_tryreset2++;
 
 			// If the new object is a Backbone collection, assume this one is
 			// being retired. Ditto if it's not a collection at all
 			if ( models instanceof Backbone.Collection || Object.prototype.toString.call( models ) !== '[object Array]' ) {
 				return false;
 			}
+			counter.collection_reset++;
 
 			// Otherwise if this is a plain array, reset the collection
 			this.value.reset( models );
